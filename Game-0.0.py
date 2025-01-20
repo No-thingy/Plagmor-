@@ -8,7 +8,7 @@ import math
 pygame.init()
 
 settings = {
-    'volume': 50,
+    'volume': 60,
     'difficulty': 1,
     'resolution': (800, 600),
     'fullscreen': False
