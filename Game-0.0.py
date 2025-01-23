@@ -63,9 +63,7 @@ pygame.mixer.init()
 attack_sound = pygame.mixer.Sound("attack.wav") if os.path.exists("attack.wav") else None
 artifact_sound = pygame.mixer.Sound("artifact.wav") if os.path.exists("artifact.wav") else None
 background_music = pygame.mixer.Sound("background.mp3") if os.path.exists("background.mp3") else None
-
 background_image = pygame.image.load("background.jpg") if os.path.exists("background.jpg") else None
-
 
 class Decor(pygame.sprite.Sprite):
     def __init__(self, decor_type="rock"):
@@ -77,8 +75,8 @@ class Decor(pygame.sprite.Sprite):
             pygame.draw.circle(self.image, (100, 100, 100), (12, 12), 10)
             pygame.draw.circle(self.image, (80, 80, 80), (15, 10), 5)
         elif decor_type == "grass":
-            self.image = pygame.Surface((20, 20), pygame.SRCALPHA)
-            pygame.draw.polygon(self.image, (50, 200, 50), [(10, 20), (5, 10), (15, 5), (10, 0)])
+            self.image = pygame.image.load("imoge/milieu/Grass.png")  #  изображение травы 150x125
+            self.image = pygame.transform.scale(self.image, (70, 60))
         elif decor_type == "particle":
             self.image = pygame.Surface((8, 8), pygame.SRCALPHA)
             pygame.draw.circle(self.image, (200, 200, 50), (4, 4), 3)
@@ -100,14 +98,14 @@ class Decor(pygame.sprite.Sprite):
 
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, image_path="player.png"):
+    def __init__(self, image_path="imoge/player.png"): # Всё изображение игрока и врагов изображение 825x618
         super().__init__()
         if os.path.exists(image_path):
             self.image = pygame.image.load(image_path)
         else:
             self.image = pygame.Surface((30, 30))
             self.image.fill(GREEN)
-        self.image = pygame.transform.scale(self.image, (30, 30))
+        self.image = pygame.transform.scale(self.image, (60,60))
         self.rect = self.image.get_rect(center=(WIDTH // 2, HEIGHT // 2))
         self.health = 100
         self.max_health = 100
