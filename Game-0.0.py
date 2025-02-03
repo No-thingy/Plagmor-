@@ -6,6 +6,7 @@ import os
 import math
 
 pygame.init()
+pygame.mixer.init()
 
 settings = {
     'volume': 70,
@@ -59,21 +60,39 @@ DARK_GRAY = (40, 40, 40)
 
 font = pygame.font.Font(None, 36)
 
-pygame.mixer.init()
-attack_sound = pygame.mixer.Sound("attack.wav") if os.path.exists("attack.wav") else None
-artifact_sound = pygame.mixer.Sound("artifact.wav") if os.path.exists("artifact.wav") else None
-background_music = pygame.mixer.Sound("background.mp3") if os.path.exists("background.mp3") else None
-background_image = pygame.image.load("background.jpg") if os.path.exists("background.jpg") else None
+pygame.mixer.music.set_volume(settings['volume'] / 100)
+menu_music = pygame.mixer.Sound("music/Музыка в меню.mp3") if os.path.exists("music/Музыка в меню.mp3") else None
+click_sound = pygame.mixer.Sound("music/Клик по меню.wav") if os.path.exists("music/Клик по меню.wav") else None
+start_game_music = pygame.mixer.Sound("music/Начало игры.mp3") if os.path.exists("music/Начало игры.mp3") else None
+enemy_hit_sound = pygame.mixer.Sound("music/Враг получил урон.wav") if os.path.exists("music/Враг получил урон.wav") else None
+game_over_sound = pygame.mixer.Sound("music/Game_over.wav") if os.path.exists("music/Game_over.wav") else None
 
+def stop_all_music():
+    if menu_music:
+        menu_music.stop()
+    if start_game_music:
+        start_game_music.stop()
+    if game_over_sound:
+        game_over_sound.stop()
+def update_volume():
+    if menu_music:
+        menu_music.set_volume(settings['volume'] / 100)
+    if click_sound:
+        click_sound.set_volume(settings['volume'] / 100)
+    if start_game_music:
+        start_game_music.set_volume(settings['volume'] / 100)
+    if enemy_hit_sound:
+        enemy_hit_sound.set_volume(settings['volume'] / 100)
+    if game_over_sound:
+        game_over_sound.set_volume(settings['volume'] / 100)
 class Decor(pygame.sprite.Sprite):
     def __init__(self, decor_type="rock"):
         super().__init__()
         self.type = decor_type
         self.animation_frame = 0
         if decor_type == "rock":
-            self.image = pygame.Surface((25, 25), pygame.SRCALPHA)
-            pygame.draw.circle(self.image, (100, 100, 100), (12, 12), 10)
-            pygame.draw.circle(self.image, (80, 80, 80), (15, 10), 5)
+            self.image = pygame.image.load("imoge/milieu/rock.png")  # изображение травы 150x125
+            self.image = pygame.transform.scale(self.image, (30, 30))
         elif decor_type == "grass":
             self.image = pygame.image.load("imoge/milieu/Grass.png")  #  изображение травы 150x125
             self.image = pygame.transform.scale(self.image, (70, 60))
@@ -131,13 +150,13 @@ class Player(pygame.sprite.Sprite):
     def attack(self, enemies):
         if self.attack_cooldown <= 0:
             self.attack_cooldown = self.max_cooldown
-            if attack_sound: attack_sound.play()
             for enemy in enemies:
                 if self.rect.colliderect(enemy.rect):
                     enemy.health -= self.damage
+                    if enemy_hit_sound:
+                        enemy_hit_sound.play()  # Звук при атаке врага
                     if enemy.health <= 0:
                         enemy.kill()
-                        self.gain_experience(10)
 
     def gain_experience(self, amount):
         self.experience += amount
@@ -159,26 +178,38 @@ class Player(pygame.sprite.Sprite):
 
 
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self, difficulty):
+    def __init__(self, difficulty, player):
         super().__init__()
-        self.image = pygame.Surface((20, 20))
-        self.image.fill(RED)
+        self.original_image = pygame.image.load("imoge/Vrag_ryadovoy.png").convert_alpha()
+        self.image = pygame.transform.scale(self.original_image, (60, 60))
+        self.mask = pygame.mask.from_surface(self.image)
         self.rect = self.image.get_rect(center=(random.randint(0, WIDTH), random.randint(0, HEIGHT)))
         self.health = 20 * difficulty
         self.damage = 5 * difficulty
+        self.speed = 2 + difficulty
+        self.player = player
         self.animation_frame = 0
 
     def update(self):
-        self.rect.x += random.randint(-2, 2)
-        self.rect.y += random.randint(-2, 2)
-        self.animation_frame += 1
-        if self.animation_frame % 10 == 0:
-            self.image.fill(ORANGE if self.image.get_at((0, 0)) == RED else RED)
-        if self.rect.left > WIDTH: self.rect.right = 0
-        if self.rect.right < 0: self.rect.left = WIDTH
-        if self.rect.top > HEIGHT: self.rect.bottom = 0
-        if self.rect.bottom < 0: self.rect.top = HEIGHT
+        player_x, player_y = self.player.rect.center
+        dx = player_x - self.rect.centerx
+        dy = player_y - self.rect.centery
+        distance = math.sqrt(dx**2 + dy**2)
+        if distance != 0:
+            dx = (dx / distance) * self.speed
+            dy = (dy / distance) * self.speed
+        self.rect.x += dx
+        self.rect.y += dy
 
+        self.animation_frame += 0.5
+        scale_x = 1
+        scale_y = 1 + 0.2 * math.sin(self.animation_frame * 0.2)
+
+        new_size = (int(60 * scale_x), int(60 * scale_y))
+        self.image = pygame.transform.scale(self.original_image, new_size).convert_alpha()
+        self.rect = self.image.get_rect(center=self.rect.center)
+        old_center = self.rect.center
+        self.rect = self.image.get_rect(center=old_center)
 
 class Artifact(pygame.sprite.Sprite):
     def __init__(self):
@@ -345,8 +376,11 @@ def load_progress(player):
 
 
 def show_menu():
-    menu_options = ["Начать игру", "Настройки", "Магазин", "Выход"]
+    stop_all_music()
+    if menu_music:
+        menu_music.play(-1)
     selected_option = 0
+    menu_options = ["Начать игру", "Настройки", "Выход"]
     while True:
         screen.fill(BLACK)
         for i, option in enumerate(menu_options):
@@ -359,12 +393,23 @@ def show_menu():
                 pygame.quit()
                 sys.exit()
             if event.type == pygame.KEYDOWN:
+                if click_sound:
+                    click_sound.play()  # Звук клика
                 if event.key == pygame.K_UP:
                     selected_option = (selected_option - 1) % len(menu_options)
                 if event.key == pygame.K_DOWN:
                     selected_option = (selected_option + 1) % len(menu_options)
                 if event.key == pygame.K_RETURN:
-                    return selected_option
+                    if selected_option == 0:
+                        stop_all_music()
+                        if start_game_music:
+                            start_game_music.play(-1)  # Музыка для начала игры
+                        main()
+                    elif selected_option == 1:
+                        show_settings()
+                    elif selected_option == 2:
+                        pygame.quit()
+                        sys.exit()
 
 
 def show_settings():
@@ -393,43 +438,53 @@ def show_settings():
                 if event.key == pygame.K_DOWN:
                     selected_option = (selected_option + 1) % len(settings_options)
                 if event.key == pygame.K_RETURN:
-                    if selected_option == 0:
-                        settings['volume'] = (settings['volume'] + 10) % 110
-                        settings_options[0] = "Громкость: " + str(settings['volume'])
-                    elif selected_option == 1:
-                        settings['difficulty'] = 3 - settings['difficulty']
-                        settings_options[1] = "Сложность: " + str(settings['difficulty'])
-                    elif selected_option == 2:
-                        resolutions = [
-                            (800, 600),
-                            (1024, 768),
-                            (1280, 720),
-                            (1366, 768),
-                            (1600, 900),
-                            (1920, 1080)
-                        ]
-                        current_index = resolutions.index(settings['resolution'])
-                        new_index = (current_index + 1) % len(resolutions)
-                        set_resolution(*resolutions[new_index], settings['fullscreen'])
-                        settings_options[2] = "Разрешение: " + str(settings['resolution'][0]) + "x" + str(
-                            settings['resolution'][1])
-                    elif selected_option == 3:
-                        settings['fullscreen'] = not settings['fullscreen']
-                        set_resolution(*settings['resolution'], settings['fullscreen'])
-                        settings_options[3] = "Полный экран: " + ("Вкл" if settings['fullscreen'] else "Выкл")
-                    elif selected_option == 4:
-                        save_settings()
+                    if selected_option == 4:
                         return
+                if event.key == pygame.K_LEFT and selected_option == 0:
+                    settings['volume'] = max(0, settings['volume'] - 10)
+                    update_volume()
+                    settings_options[0] = "Громкость: " + str(settings['volume'])
+                    save_settings()
+
+                if event.key == pygame.K_RIGHT and selected_option == 0:
+                    settings['volume'] = min(100, settings['volume'] + 10)
+                    update_volume()
+                    settings_options[0] = "Громкость: " + str(settings['volume'])
+                    save_settings()
+                if selected_option == 1:
+                    settings['difficulty'] = (settings['difficulty'] % 3) + 1  # Переключение от 1 до 3
+                    settings_options[1] = "Сложность: " + str(settings['difficulty'])
+                    save_settings()
+                if selected_option == 2:
+                    resolutions = [
+                        (800, 600), (1024, 768), (1280, 720),
+                        (1366, 768), (1600, 900), (1920, 1080)
+                    ]
+                    current_index = resolutions.index(settings['resolution'])
+                    new_index = (current_index + 1) % len(resolutions)
+                    set_resolution(*resolutions[new_index], settings['fullscreen'])
+                    settings_options[2] = "Разрешение: " + str(settings['resolution'][0]) + "x" + str(settings['resolution'][1])
+                    save_settings()
+                if selected_option == 3:
+                    settings['fullscreen'] = not settings['fullscreen']
+                    set_resolution(*settings['resolution'], settings['fullscreen'])
+                    settings_options[3] = "Полный экран: " + ("Вкл" if settings['fullscreen'] else "Выкл")
+                    save_settings()
 
 
 def show_game_over():
-    game_over_options = ["Играть снова", "Выйти в меню", "Выйти из игры"]
+    stop_all_music()
+    if game_over_sound:
+        game_over_sound.play()  # Воспроизведение звука поражения
+
     selected_option = 0
+    options = ["Вернуться в меню", "Выйти из игры"]
+
     while True:
         screen.fill(BLACK)
-        text_surface = font.render("Вы проиграли!", True, RED)
-        screen.blit(text_surface, (WIDTH // 2 - 100, HEIGHT // 2 - 50))
-        for i, option in enumerate(game_over_options):
+        game_over_text = font.render("ВЫ ПРОИГРАЛИ!", True, RED)
+        screen.blit(game_over_text, (WIDTH // 2 - 100, HEIGHT // 2 - 100))
+        for i, option in enumerate(options):
             color = WHITE if i == selected_option else RED
             text_surface = font.render(option, True, color)
             screen.blit(text_surface, (WIDTH // 2 - 100, HEIGHT // 2 + i * 50))
@@ -440,11 +495,19 @@ def show_game_over():
                 sys.exit()
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_UP:
-                    selected_option = (selected_option - 1) % len(game_over_options)
+                    selected_option = (selected_option - 1) % len(options)
                 if event.key == pygame.K_DOWN:
-                    selected_option = (selected_option + 1) % len(game_over_options)
+                    selected_option = (selected_option + 1) % len(options)
                 if event.key == pygame.K_RETURN:
-                    return selected_option
+                    if selected_option == 0:
+                        stop_all_music()
+                        if menu_music:
+                            menu_music.play(-1)
+                        show_menu()
+                        return
+                    elif selected_option == 1:
+                        pygame.quit()
+                        sys.exit()
 
 
 def draw_cooldown_bar(player):
@@ -483,7 +546,7 @@ def main():
         all_sprites.add(particle)
 
     for _ in range(5):
-        enemy = Enemy(difficulty)
+        enemy = Enemy(difficulty, player)
         enemies.add(enemy)
         all_sprites.add(enemy)
 
@@ -498,8 +561,7 @@ def main():
     wave = 1
     artifact_respawn_time = 0
 
-    if background_music:
-        background_music.play(-1)
+
 
     while running:
         for event in pygame.event.get():
@@ -528,6 +590,7 @@ def main():
         if pygame.sprite.spritecollide(player, enemies, False):
             player.health -= 1
             if player.health <= 0:
+                stop_all_music()
                 selected_option = show_game_over()
                 if selected_option == 0:
                     main()
@@ -541,8 +604,6 @@ def main():
         for artifact in collected_artifacts:
             player.health = min(player.health + 20, player.max_health)
             player.gain_experience(20)
-            if artifact_sound:
-                artifact_sound.play()
 
         if len(artifacts) < 3:
             artifact_respawn_time += 1
@@ -556,12 +617,11 @@ def main():
             wave += 1
             show_dialog(f"Волна {wave} пройдена!")
             for _ in range(5 + wave):
-                enemy = Enemy(difficulty)
+                enemy = Enemy(difficulty, player)
                 enemies.add(enemy)
                 all_sprites.add(enemy)
 
-        if background_image:
-            screen.blit(background_image, (0, 0))
+
         else:
             for y in range(HEIGHT):
                 color = tuple(c1 + (c2 - c1) * y / HEIGHT for c1, c2 in zip((30, 30, 50), (10, 10, 20)))
@@ -581,7 +641,6 @@ def main():
         draw_level_indicator(player)
         draw_experience_bar(player)
         draw_cooldown_bar(player)
-
         pygame.display.flip()
         clock.tick(30)
 
